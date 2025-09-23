@@ -6,10 +6,9 @@ import (
 )
 
 type Client interface {
-	ListInstances(folderID string) ([]Instance, error)
-	ListClouds() ([]Cloud, error)
-	ListFolders(cloudID string) ([]Folder, error)
-	ListAllInstances() ([]Instance, error)
+	ListInstancesByCloud(cloudID string) ([]Instance, error)
+	ListQuotaServices() ([]string, error)
+	ListQuotaLimits(cloudID, service string) ([]Quota, error)
 }
 
 type client struct {

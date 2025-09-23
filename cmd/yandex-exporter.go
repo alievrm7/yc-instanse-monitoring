@@ -42,10 +42,10 @@ func main() {
 			"The target number of CPUs Go will run on (GOMAXPROCS).",
 		).Envar("GOMAXPROCS").Default("1").Int()
 
-		ycToken = kingpin.Flag(
-			"yandex.token",
-			"Yandex IAM token.",
-		).Envar("YC_TOKEN").Required().String()
+		ycCloud = kingpin.Flag(
+			"yandex.cloud",
+			"Yandex Cloud ID",
+		).Envar("YC_CLOUD").Required().String()
 
 		toolkitFlags = kingpinflag.AddFlags(kingpin.CommandLine, ":9101")
 	)
@@ -67,15 +67,24 @@ func main() {
 	runtime.GOMAXPROCS(*maxProcs)
 	logger.Debug("Go MAXPROCS", "procs", runtime.GOMAXPROCS(0))
 
+	// --- Получаем токен ---
+	token, err := yandexapi.GetIAMTokenFromEnv()
+	if err != nil {
+		logger.Error("failed to get token", "err", err)
+		os.Exit(1)
+	}
+
 	// --- API client ---
-	api := yandexapi.NewClient(*ycToken)
+	api := yandexapi.NewClient(token)
 
 	// --- Collectors ---
-	instCollector := collector.NewInstancesCollector(api)
+	instCollector := collector.NewInstancesCollector(api, *ycCloud)
+	quotaCollector := collector.NewQuotaCollector(api, *ycCloud)
 
 	// --- Prometheus registry ---
 	reg := prometheus.NewRegistry()
 	reg.MustRegister(instCollector)
+	reg.MustRegister(quotaCollector)
 
 	if !*disableExporterMetrics {
 		reg.MustRegister(
@@ -100,6 +109,7 @@ func main() {
 			{Address: *metricsPath, Text: "Metrics"},
 		},
 	}
+
 	if landingPage, err := web.NewLandingPage(landingConfig); err == nil {
 		http.Handle("/", landingPage)
 	}
