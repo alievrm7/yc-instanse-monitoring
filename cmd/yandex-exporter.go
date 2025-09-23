@@ -42,6 +42,9 @@ func main() {
 			"The target number of CPUs Go will run on (GOMAXPROCS).",
 		).Envar("GOMAXPROCS").Default("1").Int()
 
+		ycTokenFile = kingpin.Flag("yandex.token-file", "Path to IAM token file").
+				Envar("YC_IAM_TOKEN_FILE").Required().String()
+
 		ycCloud = kingpin.Flag(
 			"yandex.cloud",
 			"Yandex Cloud ID",
@@ -67,15 +70,8 @@ func main() {
 	runtime.GOMAXPROCS(*maxProcs)
 	logger.Debug("Go MAXPROCS", "procs", runtime.GOMAXPROCS(0))
 
-	// --- Получаем токен ---
-	token, err := yandexapi.GetIAMTokenFromEnv()
-	if err != nil {
-		logger.Error("failed to get token", "err", err)
-		os.Exit(1)
-	}
-
 	// --- API client ---
-	api := yandexapi.NewClient(token)
+	api := yandexapi.NewClient(*ycTokenFile)
 
 	// --- Collectors ---
 	instCollector := collector.NewInstancesCollector(api, *ycCloud)
@@ -100,19 +96,6 @@ func main() {
 			MaxRequestsInFlight: *maxRequests,
 		},
 	))
-
-	landingConfig := web.LandingConfig{
-		Name:        "Yandex Exporter",
-		Description: "Prometheus exporter for Yandex.Cloud",
-		Version:     version.Info(),
-		Links: []web.LandingLinks{
-			{Address: *metricsPath, Text: "Metrics"},
-		},
-	}
-
-	if landingPage, err := web.NewLandingPage(landingConfig); err == nil {
-		http.Handle("/", landingPage)
-	}
 
 	// --- Run server ---
 	server := &http.Server{}

@@ -52,7 +52,11 @@ func (c *client) ListInstancesByCloud(cloudID string) ([]Instance, error) {
 
 		url := fmt.Sprintf("https://compute.api.cloud.yandex.net/compute/v1/instances?folderId=%s", f.ID)
 		req, _ := http.NewRequest(http.MethodGet, url, nil)
-		req.Header.Set("Authorization", "Bearer "+c.token)
+		token, err := c.getToken()
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Authorization", "Bearer "+token)
 
 		resp, err := c.httpCli.Do(req)
 		if err != nil {
@@ -68,9 +72,7 @@ func (c *client) ListInstancesByCloud(cloudID string) ([]Instance, error) {
 		}
 
 		for _, i := range data.Instances {
-			ipInternal := ""
-			ipExternal := ""
-
+			ipInternal, ipExternal := "", ""
 			if len(i.NetIfs) > 0 {
 				ipInternal = i.NetIfs[0].PrimaryV4Address.Address
 				if i.NetIfs[0].PrimaryV4Address.OneToOneNat.Address != "" {

@@ -23,7 +23,11 @@ func (c *client) ListQuotaServices() ([]string, error) {
 	url := "https://quota-manager.api.cloud.yandex.net/quota-manager/v1/quotaLimits/services?resourceType=resource-manager.cloud"
 
 	req, _ := http.NewRequest(http.MethodGet, url, nil)
-	req.Header.Set("Authorization", "Bearer "+c.token)
+	token, err := c.getToken()
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
 
 	resp, err := c.httpCli.Do(req)
 	if err != nil {
@@ -57,7 +61,11 @@ func (c *client) ListQuotaLimits(cloudID, service string) ([]Quota, error) {
 	)
 
 	req, _ := http.NewRequest(http.MethodGet, url, nil)
-	req.Header.Set("Authorization", "Bearer "+c.token)
+	token, err := c.getToken()
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
 
 	resp, err := c.httpCli.Do(req)
 	if err != nil {
