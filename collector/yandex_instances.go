@@ -21,7 +21,7 @@ func NewInstancesCollector(api yandexapi.Client, cloudID string) *InstancesColle
 		info: prometheus.NewDesc(
 			prometheus.BuildFQName(namespace, "instance", "info"),
 			"Yandex instance information",
-			[]string{"cloud", "name", "ip_internal", "ip_external", "status"},
+			[]string{"cloud", "name", "ip_internal", "ip_external", "status", "type"},
 			nil,
 		),
 	}
@@ -43,7 +43,7 @@ func (c *InstancesCollector) Collect(ch chan<- prometheus.Metric) {
 			c.info,
 			prometheus.GaugeValue,
 			1,
-			i.CloudID, i.Name, i.IPInternal, i.IPExternal, i.Status,
+			i.CloudID, i.Name, i.IPInternal, i.IPExternal, i.Status, "virtual machine",
 		)
 	}
 }

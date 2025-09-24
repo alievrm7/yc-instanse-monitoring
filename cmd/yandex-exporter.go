@@ -75,6 +75,11 @@ func main() {
 		promhttp.HandlerOpts{MaxRequestsInFlight: *maxRequests},
 	))
 
+	http.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ok\n"))
+	})
+
 	// --- Run server ---
 	server := &http.Server{}
 	if err := web.ListenAndServe(server, toolkitFlags, logger); err != nil {
