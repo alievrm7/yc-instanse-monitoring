@@ -1,9 +1,8 @@
 package yandexapi
 
 import (
-	"encoding/json"
+	"context"
 	"fmt"
-	"net/http"
 )
 
 type Quota struct {
@@ -12,7 +11,6 @@ type Quota struct {
 	Usage   *float64 `json:"usage"`
 }
 
-// ---- список сервисов ----
 type quotaServicesResp struct {
 	Services []struct {
 		ID string `json:"id"`
@@ -20,28 +18,20 @@ type quotaServicesResp struct {
 }
 
 func (c *client) ListQuotaServices() ([]string, error) {
-	url := "https://quota-manager.api.cloud.yandex.net/quota-manager/v1/quotaLimits/services?resourceType=resource-manager.cloud"
-
-	req, _ := http.NewRequest(http.MethodGet, url, nil)
 	token, err := c.getToken()
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Authorization", "Bearer "+token)
 
-	resp, err := c.httpCli.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("quota services request failed: %w", err)
-	}
-	defer resp.Body.Close()
+	var resp quotaServicesResp
+	url := "https://quota-manager.api.cloud.yandex.net/quota-manager/v1/quotaLimits/services?resourceType=resource-manager.cloud"
 
-	var data quotaServicesResp
-	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
-		return nil, fmt.Errorf("decode quota services failed: %w", err)
+	if err := apiGet(context.Background(), c.httpCli, token, url, &resp); err != nil {
+		return nil, err
 	}
 
-	out := make([]string, 0, len(data.Services))
-	for _, s := range data.Services {
+	out := make([]string, 0, len(resp.Services))
+	for _, s := range resp.Services {
 		if s.ID != "" {
 			out = append(out, s.ID)
 		}
@@ -49,34 +39,24 @@ func (c *client) ListQuotaServices() ([]string, error) {
 	return out, nil
 }
 
-// ---- список квот ----
 type quotaLimitsResp struct {
 	QuotaLimits []Quota `json:"quotaLimits"`
 }
 
 func (c *client) ListQuotaLimits(cloudID, service string) ([]Quota, error) {
+	token, err := c.getToken()
+	if err != nil {
+		return nil, err
+	}
+
+	var resp quotaLimitsResp
 	url := fmt.Sprintf(
 		"https://quota-manager.api.cloud.yandex.net/quota-manager/v1/quotaLimits?resource.id=%s&resource.type=resource-manager.cloud&service=%s",
 		cloudID, service,
 	)
 
-	req, _ := http.NewRequest(http.MethodGet, url, nil)
-	token, err := c.getToken()
-	if err != nil {
+	if err := apiGet(context.Background(), c.httpCli, token, url, &resp); err != nil {
 		return nil, err
 	}
-	req.Header.Set("Authorization", "Bearer "+token)
-
-	resp, err := c.httpCli.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("quota limits request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	var data quotaLimitsResp
-	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
-		return nil, fmt.Errorf("decode quota limits failed: %w", err)
-	}
-
-	return data.QuotaLimits, nil
+	return resp.QuotaLimits, nil
 }

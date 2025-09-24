@@ -3,12 +3,11 @@ package collector
 import (
 	"log/slog"
 
-	"github.com/prometheus/client_golang/prometheus"
-
 	"yandex_exporter/internal/yandexapi"
+
+	"github.com/prometheus/client_golang/prometheus"
 )
 
-// InstancesCollector собирает метрики об инстансах
 type InstancesCollector struct {
 	api     yandexapi.Client
 	cloudID string

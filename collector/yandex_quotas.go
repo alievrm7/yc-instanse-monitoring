@@ -11,9 +11,8 @@ import (
 type QuotaCollector struct {
 	api     yandexapi.Client
 	cloudID string
-
-	usage *prometheus.Desc
-	limit *prometheus.Desc
+	usage   *prometheus.Desc
+	limit   *prometheus.Desc
 }
 
 func NewQuotaCollector(api yandexapi.Client, cloudID string) *QuotaCollector {
@@ -53,6 +52,7 @@ func (c *QuotaCollector) Collect(ch chan<- prometheus.Metric) {
 			slog.Error("failed to list quota limits", "service", svc, "err", err)
 			continue
 		}
+
 		for _, q := range quotas {
 			if q.Usage != nil {
 				ch <- prometheus.MustNewConstMetric(

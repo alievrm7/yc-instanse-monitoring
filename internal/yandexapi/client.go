@@ -1,6 +1,8 @@
 package yandexapi
 
 import (
+	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -28,7 +30,7 @@ func NewClient(tokenFile string) Client {
 	}
 }
 
-// приватный метод, чтобы читать токен каждый раз
+// приватный метод для чтения токена
 func (c *client) getToken() (string, error) {
 	b, err := os.ReadFile(c.tokenFile)
 	if err != nil {
@@ -39,4 +41,25 @@ func (c *client) getToken() (string, error) {
 		return "", errors.New("token file is empty")
 	}
 	return tok, nil
+}
+
+// универсальная функция для GET-запросов (дженерик)
+func apiGet[T any](ctx context.Context, cli *http.Client, token string, url string, out *T) error {
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	resp, err := cli.Do(req)
+	if err != nil {
+		return fmt.Errorf("GET %s failed: %w", url, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("GET %s failed: status=%d", url, resp.StatusCode)
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
+		return fmt.Errorf("decode %s failed: %w", url, err)
+	}
+	return nil
 }

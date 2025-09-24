@@ -3,7 +3,6 @@ package main
 import (
 	"net/http"
 	"os"
-	"os/user"
 	"runtime"
 
 	"github.com/alecthomas/kingpin/v2"
@@ -22,35 +21,20 @@ import (
 
 func main() {
 	var (
-		metricsPath = kingpin.Flag(
-			"web.telemetry-path",
-			"Path under which to expose metrics.",
-		).Default("/metrics").String()
+		metricsPath = kingpin.Flag("web.telemetry-path", "Path to expose metrics.").
+				Default("/metrics").String()
+		disableExporterMetrics = kingpin.Flag("web.disable-exporter-metrics", "Disable exporter self-metrics.").
+					Default("false").Bool()
+		maxRequests = kingpin.Flag("web.max-requests", "Max parallel scrape requests.").
+				Default("40").Int()
+		maxProcs = kingpin.Flag("runtime.gomaxprocs", "Go MAXPROCS").
+				Envar("GOMAXPROCS").Default("1").Int()
+		ycTokenFile = kingpin.Flag("yandex.token-file", "Path to file with YC IAM token").
+				Envar("YC_TOKEN_FILE").Required().String()
+		ycCloud = kingpin.Flag("yandex.cloud", "Yandex Cloud ID").
+			Envar("YC_CLOUD_ID").Required().String()
 
-		disableExporterMetrics = kingpin.Flag(
-			"web.disable-exporter-metrics",
-			"Exclude metrics about the exporter itself (process_*, go_*).",
-		).Default("false").Bool()
-
-		maxRequests = kingpin.Flag(
-			"web.max-requests",
-			"Maximum number of parallel scrape requests. Use 0 to disable.",
-		).Default("40").Int()
-
-		maxProcs = kingpin.Flag(
-			"runtime.gomaxprocs",
-			"The target number of CPUs Go will run on (GOMAXPROCS).",
-		).Envar("GOMAXPROCS").Default("1").Int()
-
-		ycTokenFile = kingpin.Flag("yandex.token-file", "Path to IAM token file").
-				Envar("YC_IAM_TOKEN_FILE").Required().String()
-
-		ycCloud = kingpin.Flag(
-			"yandex.cloud",
-			"Yandex Cloud ID",
-		).Envar("YC_CLOUD").Required().String()
-
-		toolkitFlags = kingpinflag.AddFlags(kingpin.CommandLine, ":9101")
+		toolkitFlags = kingpinflag.AddFlags(kingpin.CommandLine, ":8080")
 	)
 
 	// --- Логгер ---
@@ -64,11 +48,8 @@ func main() {
 
 	logger.Info("Starting yandex_exporter", "version", version.Info())
 	logger.Info("Build context", "build_context", version.BuildContext())
-	if u, err := user.Current(); err == nil && u.Uid == "0" {
-		logger.Warn("Exporter is running as root — лучше использовать непривилегированного пользователя")
-	}
+
 	runtime.GOMAXPROCS(*maxProcs)
-	logger.Debug("Go MAXPROCS", "procs", runtime.GOMAXPROCS(0))
 
 	// --- API client ---
 	api := yandexapi.NewClient(*ycTokenFile)
@@ -79,8 +60,7 @@ func main() {
 
 	// --- Prometheus registry ---
 	reg := prometheus.NewRegistry()
-	reg.MustRegister(instCollector)
-	reg.MustRegister(quotaCollector)
+	reg.MustRegister(instCollector, quotaCollector)
 
 	if !*disableExporterMetrics {
 		reg.MustRegister(
@@ -92,9 +72,7 @@ func main() {
 	// --- HTTP Handlers ---
 	http.Handle(*metricsPath, promhttp.HandlerFor(
 		reg,
-		promhttp.HandlerOpts{
-			MaxRequestsInFlight: *maxRequests,
-		},
+		promhttp.HandlerOpts{MaxRequestsInFlight: *maxRequests},
 	))
 
 	// --- Run server ---
