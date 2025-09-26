@@ -106,7 +106,43 @@ Collector:
 
 - создать файл <resource>.go
 
-- описать структуру ответа API и метод List<Resource>ByCloud.
+- описать структуру ответа API и метод List<Resource>ByCloud. 
+
+Пример:
+
+```go
+package yandexapi
+
+import (
+    "context"
+    "fmt"
+)
+
+type MyResource struct {
+    ID   string `json:"id"`
+    Name string `json:"name"`
+}
+
+type listMyResourceResp struct {
+    Resources []MyResource `json:"resources"`
+}
+
+func (c *client) ListMyResourcesByCloud(cloudID string) ([]MyResource, error) {
+    token, err := c.getToken()
+    if err != nil {
+        return nil, err
+    }
+
+    url := fmt.Sprintf("https://example.api.cloud.yandex.net/v1/resources?cloudId=%s", cloudID)
+
+    var resp listMyResourceResp
+    if err := apiGet(context.Background(), c.httpCli, token, url, &resp); err != nil {
+        return nil, err
+    }
+
+    return resp.Resources, nil
+}
+```
 
 ### 2. `В collector/`
 
@@ -114,6 +150,70 @@ Collector:
 
 - описать Collector (аналогично InstancesCollector).
 
+Пример:
+
+```go
+package collector
+
+import (
+    "log/slog"
+
+    "yandex_exporter/internal/yandexapi"
+    "github.com/prometheus/client_golang/prometheus"
+)
+
+type MyResourceCollector struct {
+    api     yandexapi.Client
+    cloudID string
+    info    *prometheus.Desc
+}
+
+func NewMyResourceCollector(api yandexapi.Client, cloudID string) *MyResourceCollector {
+    return &MyResourceCollector{
+        api:     api,
+        cloudID: cloudID,
+        info: prometheus.NewDesc(
+            prometheus.BuildFQName(namespace, "myresource", "info"),
+            "Yandex MyResource information",
+            []string{"cloud", "id", "name"},
+            nil,
+        ),
+    }
+}
+
+func (c *MyResourceCollector) Describe(ch chan<- *prometheus.Desc) {
+    ch <- c.info
+}
+
+func (c *MyResourceCollector) Collect(ch chan<- prometheus.Metric) {
+    items, err := c.api.ListMyResourcesByCloud(c.cloudID)
+    if err != nil {
+        slog.Error("failed to list my resources", "err", err)
+        return
+    }
+
+    for _, r := range items {
+        ch <- prometheus.MustNewConstMetric(
+            c.info,
+            prometheus.GaugeValue,
+            1,
+            c.cloudID, r.ID, r.Name,
+        )
+    }
+}
+```
+
 ### 3. `В cmd/yandex-exporter.go`
 
 - зарегистрировать новый Collector.
+
+```go
+api := yandexapi.NewClient(*ycTokenFile)
+
+instCollector := collector.NewInstancesCollector(api, *ycCloud)
+quotaCollector := collector.NewQuotaCollector(api, *ycCloud)
+myResCollector := collector.NewMyResourceCollector(api, *ycCloud)
+
+reg := prometheus.NewRegistry()
+reg.MustRegister(instCollector, quotaCollector, myResCollector)
+```
