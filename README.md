@@ -78,7 +78,7 @@ go build -o yandex-cloud-exporter ./cmd/yandex-cloud-exporter.go
 Здесь находится `client.go` — универсальный клиент, который:
 
 - читает токен из файла (`getToken`)
-- умеет делать GET-запрос (`apiGet`)
+- делает GET-запрос с пагинацией (`apiPagedGet`)
 - хранит интерфейс `Client` с методами для конкретных ресурсов.
 
 Все конкретные запросы (`ListInstancesByCloud`, `ListQuotaLimits`, `ListFolders`) реализуются в отдельных файлах (`instances.go`, `quotas.go`, `folders.go`).
@@ -100,7 +100,7 @@ Collector:
 - регистрируется в основном бинарнике.
 
 
-## Алгоритм для любого нового ресурса
+## Алгоритм для добавления любого нового ресурса
 
 ### 1. `В internal/yandexapi/`
 
@@ -123,24 +123,31 @@ type MyResource struct {
     Name string `json:"name"`
 }
 
-type listMyResourceResp struct {
-    Resources []MyResource `json:"resources"`
-}
-
 func (c *client) ListMyResourcesByCloud(cloudID string) ([]MyResource, error) {
     token, err := c.getToken()
     if err != nil {
         return nil, err
     }
 
-    url := fmt.Sprintf("https://example.api.cloud.yandex.net/v1/resources?cloudId=%s", cloudID)
-
-    var resp listMyResourceResp
-    if err := apiGet(context.Background(), c.httpCli, token, url, &resp); err != nil {
-        return nil, err
+    var all []MyResource
+    err = apiPagedGet(
+        context.Background(),
+        c.httpCli,
+        token,
+        func(pageToken string) string {
+            if pageToken == "" {
+                return fmt.Sprintf("https://example.api.cloud.yandex.net/v1/resources?cloudId=%s&pageSize=1000", cloudID)
+            }
+            return fmt.Sprintf("https://example.api.cloud.yandex.net/v1/resources?cloudId=%s&pageSize=1000&pageToken=%s", cloudID, pageToken)
+        },
+        "resources", // ключ массива в JSON
+        &all,
+    )
+    if err != nil {
+        return nil, fmt.Errorf("list my resources failed: %w", err)
     }
 
-    return resp.Resources, nil
+    return all, nil
 }
 ```
 
@@ -157,8 +164,8 @@ package collector
 
 import (
     "log/slog"
-
     "yandex_exporter/internal/yandexapi"
+
     "github.com/prometheus/client_golang/prometheus"
 )
 
@@ -188,7 +195,7 @@ func (c *MyResourceCollector) Describe(ch chan<- *prometheus.Desc) {
 func (c *MyResourceCollector) Collect(ch chan<- prometheus.Metric) {
     items, err := c.api.ListMyResourcesByCloud(c.cloudID)
     if err != nil {
-        slog.Error("failed to list my resources", "err", err)
+        slog.Debug("failed to list my resources", "err", err) // DEBUG, не ломаем scrape
         return
     }
 
