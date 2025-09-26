@@ -72,51 +72,48 @@ go build -o yandex-cloud-exporter ./cmd/yandex-cloud-exporter.go
 
 Экспортер разделён на два слоя:
 
-1) internal/yandexapi/  
+### 1. `internal/yandexapi/`
 Этот пакет знает, как сходить в API Яндекса, получить JSON и превратить его в Go-структуры.
 
-Здесь находится client.go — универсальный клиент, который:
+Здесь находится `client.go` — универсальный клиент, который:
 
-- читает токен из файла (getToken)
+- читает токен из файла (`getToken`)
+- умеет делать GET-запрос (`apiGet`)
+- хранит интерфейс `Client` с методами для конкретных ресурсов.
 
-- умеет делать GET-запрос (apiGet)
+Все конкретные запросы (`ListInstancesByCloud`, `ListQuotaLimits`, `ListFolders`) реализуются в отдельных файлах (`instances.go`, `quotas.go`, `folders.go`).
 
-- хранит интерфейс Client с методами для конкретных ресурсов.
+При добавлении нового ресурса (например, `disks.go`, `databases.go`) мы не копируем сетевую логику, а используем общий `client.go`.
 
-Все конкретные запросы (ListInstancesByCloud, ListQuotaLimits, ListFolders) реализуются в отдельных файлах (instances.go, quotas.go, folders.go).
+---
 
-При добавлении нового ресурса (disks.go, databases.go) мы не копировали сетевую логику, а использовали общий client.go.
-
-2) collector/  
+### 2. `collector/`
 Этот пакет отвечает за Prometheus-метрики.
 
-collector.go — общий "агрегатор" всех коллекторов (он просто вызывает их по очереди).
-
-Каждый отдельный ресурс (например, yandex_instances.go) реализует свой Collector. 
+- `collector.go` — общий "агрегатор" всех коллекторов (он просто вызывает их по очереди).
+- Каждый отдельный ресурс (например, `yandex_instances.go`) реализует свой `Collector`.
 
 Collector:
 
-- вызывает методы из yandexapi
-
-- конвертирует данные в метрики Prometheus (prometheus.NewDesc, MustNewConstMetric)
-
+- вызывает методы из `yandexapi`
+- конвертирует данные в метрики Prometheus (`prometheus.NewDesc`, `MustNewConstMetric`)
 - регистрируется в основном бинарнике.
 
 
 ## Алгоритм для любого нового ресурса
 
-1) В internal/yandexapi/
+### 1. `В internal/yandexapi/`
 
 - создать файл <resource>.go
 
 - описать структуру ответа API и метод List<Resource>ByCloud.
 
-2) В collector/
+### 2. `В collector/`
 
 - создать файл yandex_<resource>.go
 
 - описать Collector (аналогично InstancesCollector).
 
-3) В cmd/yandex-exporter.go
+### 3. `В cmd/yandex-exporter.go`
 
 - зарегистрировать новый Collector.
