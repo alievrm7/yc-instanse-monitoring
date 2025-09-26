@@ -29,7 +29,7 @@ IAM-токен с правами:
 ```
 <ваш_IAM_токен_одной_строкой>
 ```
-2. Установить зависимости и собрать
+2. Установить зависимости и собрать:
 
 ```bash
 # установить зависимости (один раз)
@@ -72,7 +72,7 @@ go build -o yandex-cloud-exporter ./cmd/yandex-cloud-exporter.go
 
 Экспортер разделён на два слоя:
 
-1. internal/yandexapi/
+1) internal/yandexapi/  
 Этот пакет знает, как сходить в API Яндекса, получить JSON и превратить его в Go-структуры.
 
 Здесь находится client.go — универсальный клиент, который:
@@ -87,7 +87,7 @@ go build -o yandex-cloud-exporter ./cmd/yandex-cloud-exporter.go
 
 При добавлении нового ресурса (disks.go, databases.go) мы не копировали сетевую логику, а использовали общий client.go.
 
-2. collector/
+2) collector/  
 Этот пакет отвечает за Prometheus-метрики.
 
 collector.go — общий "агрегатор" всех коллекторов (он просто вызывает их по очереди).
@@ -105,18 +105,18 @@ Collector:
 
 ## Алгоритм для любого нового ресурса
 
-1. В internal/yandexapi/
+1) В internal/yandexapi/
 
 - создать файл <resource>.go
 
 - описать структуру ответа API и метод List<Resource>ByCloud.
 
-2. В collector/
+2) В collector/
 
 - создать файл yandex_<resource>.go
 
 - описать Collector (аналогично InstancesCollector).
 
-3. В cmd/yandex-exporter.go
+3) В cmd/yandex-exporter.go
 
 - зарегистрировать новый Collector.
